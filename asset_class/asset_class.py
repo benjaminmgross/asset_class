@@ -39,7 +39,12 @@ def r_squared(portfolio_prices, asset_prices):
     return 1 - sse/sst
 
 
-def get_asset_class(asset_series):
+def get_all_classes(asset_series):
+    asset_class = get_asset_classes(asset_series)
+    sub_classes = get_sub_classes(asset_series, asset_class)
+    return sub_classes.append(pandas.Series([asset_class], ['Asset Class']))
+
+def get_asset_classes(asset_series):
     ac_dict = {'VTSMX':'US Equity', 'VBMFX':'Fixed Income', 'VGTSX':'Intl Equity',
                'IYR':'Alternative', 'GLD':'Alternative', 'GSG':'Alternative',
                'WPS':'Alternative'}
@@ -58,27 +63,33 @@ def get_sub_classes(asset_series, asset_class):
                'US High Yield':'HYG', 'US Treasuries ST':'SHY',
                'US Treasuries LT':'TLT', 'US Treasuries MT':'IEF'}
 
-    us_eq_dict = {'U.S. Large Cap Growth':'JKE', 'U.S. Large Cap Value':'JKF',
-                  'U.S. Mid Cap Growth':'JKH','U.S. Mid Cap Value':'JKI',
-                  'U.S. Small Cap Growth':'JKK', 'U.S. Small Cap Value':'JKL'}
+    us_eq_dict = {'US Large Cap Growth':'JKE', 'US Large Cap Value':'JKF',
+                  'US Mid Cap Growth':'JKH','US Mid Cap Value':'JKI',
+                  'US Small Cap Growth':'JKK', 'US Small Cap Value':'JKL'}
 
     for_eq_dict = {'Foreign Developed Small Cap':'SCZ',
                    'Foreign Developed Large Growth':'EFG',
                    'Foreign Developed Large Value':'EFV',
                    'Foreign Emerging Market':'EEM'}
 
-    alt_dict = {'Commodities':'GSG', 'U.S. Real Estate':'IYR',
-                'Foreign Real Estate':'WPS', 'U.S. Preferred Stock':'PFF'}
+    alt_dict = {'Commodities':'GSG', 'US Real Estate':'IYR',
+                'Foreign Real Estate':'WPS', 'US Preferred Stock':'PFF'}
 
 
     sub_dict = {'Fixed Income': fi_dict, 'US Equity': us_eq_dict,
                 'Intl Equity': for_eq_dict, 'Alternative': alt_dict}
 
-    ac_prices = web.DataReader(sub_dict[asset_class].values(), 'yahoo',
+    pairs = sub_dict[asset_class]
+    vals = pairs.items()
+    
+    ac_prices = web.DataReader(pairs.values(), 'yahoo',
                                start = '01/01/2000')['Adj Close']
 
-    return best_fitting_benchmark(asset_series, ac_prices)
+    ret_frame = best_fitting_weights(asset_series, ac_prices)
+    ret_frame.columns = [val[1] for val in vals]
+    ret_frame.columns = [val[0] for val in vals]
 
+    return ret_frame
     
 
 def load_asset_classes(asset_series):
