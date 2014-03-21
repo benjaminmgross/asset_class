@@ -38,6 +38,49 @@ def r_squared(portfolio_prices, asset_prices):
     sst = ((portfolio_returns - portfolio_returns.mean())**2).sum()
     return 1 - sse/sst
 
+
+def get_asset_class(asset_series):
+    ac_dict = {'VTSMX':'US Equity', 'VBMFX':'Fixed Income', 'VGTSX':'Intl Equity',
+               'IYR':'Alternative', 'GLD':'Alternative', 'GSG':'Alternative',
+               'WPS':'Alternative'}
+    data = web.DataReader(ac_dict.keys(), 'yahoo')['Adj Close']
+    rsq_d = {}
+    for ticker in data.columns:
+        ind = asset_series.index & data[ticker].index
+        rsq_d[ticker] = r_squared(asset_series[ind], data[ticker][ind])
+    rsq = pandas.Series(rsq_d)
+    return ac_dict[rsq.argmax()]
+    
+def get_sub_classes(asset_series, asset_class):
+    
+    fi_dict = {'US Inflation Protected':'TIP', 'Foreign Treasuries':'BWX',
+               'Foreign High Yield':'PCY','US Investment Grade':'LQD',
+               'US High Yield':'HYG', 'US Treasuries ST':'SHY',
+               'US Treasuries LT':'TLT', 'US Treasuries MT':'IEF'}
+
+    us_eq_dict = {'U.S. Large Cap Growth':'JKE', 'U.S. Large Cap Value':'JKF',
+                  'U.S. Mid Cap Growth':'JKH','U.S. Mid Cap Value':'JKI',
+                  'U.S. Small Cap Growth':'JKK', 'U.S. Small Cap Value':'JKL'}
+
+    for_eq_dict = {'Foreign Developed Small Cap':'SCZ',
+                   'Foreign Developed Large Growth':'EFG',
+                   'Foreign Developed Large Value':'EFV',
+                   'Foreign Emerging Market':'EEM'}
+
+    alt_dict = {'Commodities':'GSG', 'U.S. Real Estate':'IYR',
+                'Foreign Real Estate':'WPS', 'U.S. Preferred Stock':'PFF'}
+
+
+    sub_dict = {'Fixed Income': fi_dict, 'US Equity': us_eq_dict,
+                'Intl Equity': for_eq_dict, 'Alternative': alt_dict}
+
+    ac_prices = web.DataReader(sub_dict[asset_class].values(), 'yahoo',
+                               start = '01/01/2000')['Adj Close']
+
+    return best_fitting_benchmark(asset_series, ac_prices)
+
+    
+
 def load_asset_classes(asset_series):
     """
     Load the different prices that can be determined to find the "Broad Asset Class"
@@ -45,6 +88,24 @@ def load_asset_classes(asset_series):
     """
     ac_dict = {'VTSMX':'US Equity', 'VBMFX':'Fixed Income', 'VGTSX':'Intl Equity',
                'IYR':'Alternative', 'GLD':'Alternative', 'GSG':'Alternative'}
+
+    fi_dict = {'US Inflation Protected':'TIP', 'Foreign Treasuries':'BWX',
+               'Foreign High Yield':'PCY','US Investment Grade':'LQD',
+               'US High Yield':'HYG', 'US Treasuries ST':'SHY',
+               'US Treasuries LT':'TLT', 'US Treasuries MT':'IEF'}
+
+    us_eq_dict = {'U.S. Large Cap Growth':'JKE', 'U.S. Large Cap Value':'JKF',
+                  'U.S. Mid Cap Growth':'JKH','U.S. Mid Cap Value':'JKI',
+                  'U.S. Small Cap Growth':'JKK', 'U.S. Small Cap Value':'JKL'}
+
+    for_eq_dict = {'Foreign Developed Small Cap':'SCZ',
+                   'Foreign Developed Large Growth':'EFG',
+                   'Foreign Developed Large Value':'EFV',
+                   'Foreign Emerging Market':'EEM'}
+
+
+    alt_dict = {'Commodities':'GSG', 'U.S. Real Estate':'IYR',
+                'Foreign Real Estate':'WPS', 'U.S. Preferred Stock':'PFF'}
         
     asset_classes = ['US Equity', 'Fixed Income', 'Intl Equity', 'Alternative']
     tickers = ['VTSMX', 'VBMFX', 'VGTSX', 'PFF','IYR','GLD','GSG']
@@ -91,12 +152,18 @@ def best_fitting_weights(asset_prices, ac_prices):
         """
         return -_r_squared_adj(weights)
 
-    asset_returns = ac_prices.pct_change()
-    portfolio_returns = asset_prices.pct_change()
+    asset_prices.dropna(inplace = True)
+    ac_prices.dropna(inplace = True)
+    if ac_prices.index.equals(asset_prices.index) == False:
+        ind = ac_prices.index & asset_prices.index
+        asset_returns = ac_prices.loc[ind, :].pct_change()
+        portfolio_returns = asset_prices[ind].pct_change()
+    else:
+        asset_returns = ac_prices.pct_change()
+        portfolio_returns = asset_prices.pct_change()
+
     num_assets = asset_returns.shape[1]
     guess = numpy.zeros(num_assets,)
-    #sum_to_one = lambda x: numpy.dot(numpy.tile(x, num_assets,),
-    #numpy.ones(num_assets,)) - 1
 
     #ensure the boundaries of the function are (0, 1)
     ge_zero = [(0,1) for i in numpy.arange(num_assets)]
@@ -104,7 +171,6 @@ def best_fitting_weights(asset_prices, ac_prices):
     #optimize to maximize r-squared, using the 'TNC' method (that uses the boundary
     #functionality)
     opt = sopt.minimize(_obj_fun, x0 = guess, method = 'TNC', bounds = ge_zero)
-
     normed = opt.x*(1./numpy.sum(opt.x))
 
     return pandas.TimeSeries(normed, index = asset_returns.columns)
