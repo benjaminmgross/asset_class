@@ -12,32 +12,49 @@ import numpy
 import scipy.optimize as sopt
 import pandas.io.data as web
 
+def clean_dates(arr_a, arr_b):
+    arr_a.dropna(inplace = True)
+    arr_b.dropna(inplace = True)
+    if arr_a.index.equals(arr_b.index) == False:
+        return arr_a.index & arr_b.index
+    else:
+        return arr_a.index
 
-def r_squared_adj(portfolio_prices, asset_prices, weights):
+def r_squared_adj(folio_prices, asset_prices, weights):
     """
     The Adjusted R-Squared that incorporates the number of independent variates
     using the `Formula Found of Wikipedia
     <http://en.wikipedia.org/wiki/Coefficient_of_determination#Adjusted_R2>_`
     """
-    asset_returns = asset_prices.pct_change()
-    portfolio_returns = portfolio_prices.pct_change()
-    estimate = numpy.dot(asset_returns, weights)
-    sse = ((estimate - portfolio_returns)**2).sum()
-    sst = ((portfolio_returns - portfolio_returns.mean())**2).sum()
+    dts = clean_dates(asset_prices, folio_prices)
+    
+    asset_rets = asset_prices.loc[dts, :].pct_change()
+    folio_rets = folio_prices[dts].pct_change()
+
+    asset_rets = asset_rets.sub(asset_rets.mean() )
+    folio_rets = folio_rets.sub(folio_rets.mean() )
+    
+    estimate = numpy.dot(asset_rets, weights)
+    sse = ((estimate - folio_rets)**2).sum()
+    sst = ((folio_rets - folio_rets.mean())**2).sum()
     rsq = 1 - sse/sst
-    p, n = weights.shape[0], asset_returns.dropna().shape[0]
+    p, n = weights.shape[0], asset_rets.dropna().shape[0]
     return rsq - (1 - rsq)*(float(p)/(n - p - 1))
     
-def r_squared(portfolio_prices, asset_prices):
+def r_squared(folio_prices, asset_prices):
     """
     Univariate R-Squared
     """
-    asset_returns = asset_prices.pct_change()
-    portfolio_returns = portfolio_prices.pct_change()
-    sse = ((asset_returns - portfolio_returns)**2).sum()
-    sst = ((portfolio_returns - portfolio_returns.mean())**2).sum()
+    ind = clean_dates(folio_prices, asset_prices)
+    
+    asset_rets = asset_prices[ind].pct_change()
+    folio_rets = folio_prices[ind].pct_change()
+    asset_rets = asset_rets.sub(asset_rets.mean() )
+    folio_rets = folio_rets.sub(folio_rets.mean() )
+    
+    sse = ((asset_rets - folio_rets)**2).sum()
+    sst = ((folio_rets - folio_rets.mean())**2).sum()
     return 1 - sse/sst
-
 
 def get_all_classes(asset_series):
     asset_class = get_asset_classes(asset_series)
@@ -147,11 +164,11 @@ def best_fitting_weights(asset_prices, ac_prices):
         <http://en.wikipedia.org/wiki/Coefficient_of_determination#Adjusted_R2>_`
         """
 
-        estimate = numpy.dot(asset_returns, weights)
-        sse = ((estimate - portfolio_returns)**2).sum()
-        sst = ((portfolio_returns - portfolio_returns.mean())**2).sum()
+        estimate = numpy.dot(asset_rets, weights)
+        sse = ((estimate - folio_rets)**2).sum()
+        sst = ((folio_rets - folio_rets.mean())**2).sum()
         rsq = 1 - sse/sst
-        p, n = weights.shape[0], asset_returns.dropna().shape[0]
+        p, n = weights.shape[0], asset_rets.shape[0]
         return rsq - (1 - rsq)*(float(p)/(n - p - 1))
 
     def _obj_fun(weights):
@@ -164,13 +181,15 @@ def best_fitting_weights(asset_prices, ac_prices):
     ac_prices.dropna(inplace = True)
     if ac_prices.index.equals(asset_prices.index) == False:
         ind = ac_prices.index & asset_prices.index
-        asset_returns = ac_prices.loc[ind, :].pct_change()
-        portfolio_returns = asset_prices[ind].pct_change()
+        asset_rets = ac_prices.loc[ind, :].pct_change()
+        folio_rets = asset_prices[ind].pct_change()
+        asset_rets = asset_rets.sub(asset_rets.mean() )
+        folio_rets = folio_rets.sub(folio_rets.mean() )
     else:
-        asset_returns = ac_prices.pct_change()
-        portfolio_returns = asset_prices.pct_change()
+        asset_rets = ac_prices.pct_change()
+        folio_rets = asset_prices.pct_change()
 
-    num_assets = asset_returns.shape[1]
+    num_assets = asset_rets.shape[1]
     guess = numpy.zeros(num_assets,)
 
     #ensure the boundaries of the function are (0, 1)
@@ -181,4 +200,4 @@ def best_fitting_weights(asset_prices, ac_prices):
     opt = sopt.minimize(_obj_fun, x0 = guess, method = 'TNC', bounds = ge_zero)
     normed = opt.x*(1./numpy.sum(opt.x))
 
-    return pandas.TimeSeries(normed, index = asset_returns.columns)
+    return pandas.TimeSeries(normed, index = asset_rets.columns)
