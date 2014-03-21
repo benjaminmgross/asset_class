@@ -80,16 +80,13 @@ def get_sub_classes(asset_series, asset_class):
                 'Intl Equity': for_eq_dict, 'Alternative': alt_dict}
 
     pairs = sub_dict[asset_class]
-    vals = pairs.items()
-    
     ac_prices = web.DataReader(pairs.values(), 'yahoo',
                                start = '01/01/2000')['Adj Close']
-
-    ret_frame = best_fitting_weights(asset_series, ac_prices)
-    ret_frame.columns = [val[1] for val in vals]
-    ret_frame.columns = [val[0] for val in vals]
-
-    return ret_frame
+    ret_series = best_fitting_weights(asset_series, ac_prices)
+    
+    #change the column names to asset classes instead of tickers
+    ret_series = ret_series.rename(index = {v:k for k, v in pairs.iteritems()})
+    return ret_series
     
 
 def load_asset_classes(asset_series):
