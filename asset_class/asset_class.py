@@ -13,48 +13,17 @@ import scipy.optimize as sopt
 import pandas.io.data as web
 
 def clean_dates(arr_a, arr_b):
+    """
+    Return the intersection of two indexes
+    """
+    arr_a = arr_a.sort_index()
     arr_a.dropna(inplace = True)
+    arr_b = arr_b.sort_index()
     arr_b.dropna(inplace = True)
     if arr_a.index.equals(arr_b.index) == False:
         return arr_a.index & arr_b.index
     else:
         return arr_a.index
-
-def r_squared_adj(folio_prices, asset_prices, weights):
-    """
-    The Adjusted R-Squared that incorporates the number of independent variates
-    using the `Formula Found of Wikipedia
-    <http://en.wikipedia.org/wiki/Coefficient_of_determination#Adjusted_R2>_`
-    """
-    dts = clean_dates(asset_prices, folio_prices)
-    
-    asset_rets = asset_prices.loc[dts, :].pct_change()
-    folio_rets = folio_prices[dts].pct_change()
-
-    asset_rets = asset_rets.sub(asset_rets.mean() )
-    folio_rets = folio_rets.sub(folio_rets.mean() )
-    
-    estimate = numpy.dot(asset_rets, weights)
-    sse = ((estimate - folio_rets)**2).sum()
-    sst = ((folio_rets - folio_rets.mean())**2).sum()
-    rsq = 1 - sse/sst
-    p, n = weights.shape[0], asset_rets.dropna().shape[0]
-    return rsq - (1 - rsq)*(float(p)/(n - p - 1))
-    
-def r_squared(folio_prices, asset_prices):
-    """
-    Univariate R-Squared
-    """
-    ind = clean_dates(folio_prices, asset_prices)
-    
-    asset_rets = asset_prices[ind].pct_change()
-    folio_rets = folio_prices[ind].pct_change()
-    asset_rets = asset_rets.sub(asset_rets.mean() )
-    folio_rets = folio_rets.sub(folio_rets.mean() )
-    
-    sse = ((asset_rets - folio_rets)**2).sum()
-    sst = ((folio_rets - folio_rets.mean())**2).sum()
-    return 1 - sse/sst
 
 def get_all_classes(asset_series):
     asset_class = get_asset_classes(asset_series)
@@ -144,6 +113,11 @@ def load_asset_classes(asset_series):
 
 def best_fitting_weights(asset_prices, ac_prices):
     """
+    Return the best fitting weights given a :class:`pandas.Series` of asset prices
+    and a :class:`pandas.DataFrame` of asset class prices.  Can be used with the
+    :func:`clean_dates` function to ensure an intersection of the two indexes is
+    being passed to the function
+    
     :ARGS:
 
         asset_prices: m x 1 :class:`pandas.TimeSeries` of asset_prices
@@ -177,21 +151,14 @@ def best_fitting_weights(asset_prices, ac_prices):
         """
         return -_r_squared_adj(weights)
 
-    asset_prices.dropna(inplace = True)
-    ac_prices.dropna(inplace = True)
+    #linear price changes to create a weighted return
+    asset_rets = ac_prices.loc[ind, :].pct_change()
+    folio_rets = asset_prices[ind].pct_change()
 
-    #de-mean the return samples & make sure indexes are the same 
-    if ac_prices.index.equals(asset_prices.index) == False:
-        ind = ac_prices.index & asset_prices.index
-        asset_rets = ac_prices.loc[ind, :].pct_change()
-        folio_rets = asset_prices[ind].pct_change()
-        asset_rets = asset_rets.sub(asset_rets.mean() )
-        folio_rets = folio_rets.sub(folio_rets.mean() )
-    else:
-        asset_rets = ac_prices.pct_change()
-        asset_rets = asset_rets.sub( asset_rets.mean() )
-        folio_rets = asset_prices.pct_change()
-        folio_rets = folio_rets.sum( folio_rets.mean() )
+    #de-mean the sample
+    asset_rets = asset_rets.sub(asset_rets.mean() )
+    folio_rets = folio_rets.sub(folio_rets.mean() )
+
 
     num_assets = asset_rets.shape[1]
     guess = numpy.zeros(num_assets,)
@@ -205,3 +172,36 @@ def best_fitting_weights(asset_prices, ac_prices):
     normed = opt.x*(1./numpy.sum(opt.x))
 
     return pandas.TimeSeries(normed, index = asset_rets.columns)
+
+def asset_class_over_interval(series, benchmark, interval):
+    """
+    Return asset class weightings that explain the asset returns over interval
+    periods of "interval."
+
+    :ARGS:
+
+        asset_prices: :class:`pandas.Series` of the asset for which attribution
+        will be done
+
+        asset_class_prices: :class:`pandas.DataFrame` of asset class prices
+
+        interval :class:string of the frequency interval 'quarterly' or 'annual'
+
+    :RETURNS:
+
+        :class:`pandas.DataFrame` of proportions of each asset class that most
+        explain the returns of the individual security
+    """
+    ind = clean_dates(series, benchmark)
+    dt_dict = {'quarterly': lambda x: x.quarter, 'annually': lambda x: x.year}
+    dts = numpy.append(True,
+                       dt_dict[interval](ind[1:]) != dt_dict[interval](ind[:-1]) )
+
+    weight_d  = {}
+    for beg, fin in zip(dts[:-1], dts[1:]):
+        weight_d[beg] = best_fitting_weights(series[beg:fin],
+                                             benchmark.loc[beg:fin, :])
+
+    return pandas.DataFrame(weight_d).transpose()
+
+    
