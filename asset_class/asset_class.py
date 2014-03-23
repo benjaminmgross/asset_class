@@ -179,6 +179,8 @@ def best_fitting_weights(asset_prices, ac_prices):
 
     asset_prices.dropna(inplace = True)
     ac_prices.dropna(inplace = True)
+
+    #de-mean the return samples & make sure indexes are the same 
     if ac_prices.index.equals(asset_prices.index) == False:
         ind = ac_prices.index & asset_prices.index
         asset_rets = ac_prices.loc[ind, :].pct_change()
@@ -187,7 +189,9 @@ def best_fitting_weights(asset_prices, ac_prices):
         folio_rets = folio_rets.sub(folio_rets.mean() )
     else:
         asset_rets = ac_prices.pct_change()
+        asset_rets = asset_rets.sub( asset_rets.mean() )
         folio_rets = asset_prices.pct_change()
+        folio_rets = folio_rets.sum( folio_rets.mean() )
 
     num_assets = asset_rets.shape[1]
     guess = numpy.zeros(num_assets,)
