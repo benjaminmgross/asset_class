@@ -2,7 +2,7 @@
 # encoding: utf-8
 """
 .. module:: asset_class.py
-   :synopsis: Do fun things with Asset Classes
+   :synopsis: Asset Class Attribution Analysis Made Easy
 
 .. moduleauthor:: Benjamin M. Gross <benjaminMgross@gmail.com>
 """
@@ -13,72 +13,86 @@ import scipy.optimize as sopt
 import pandas.io.data as web
 import visualize_wealth.analyze as vwa
 
-def clean_dates(arr_a, arr_b):
+def asset_class_and_subclass_by_interval(series, interval):
     """
-    Return the intersection of two indexes
+    Aggregator function to determine the asset class for the entire period,
+    followed by asset subclass over intervals of ``interval.``
+
+    :ARGS:
+
+        series: :class:`pandas.Series` of asset prices
+
+        interval: :class:string of the interval, currently only accepts ``quarterly``
+        or ``annual``
+
+    :RETURNS:
+
+        :class:`pandas.DataFrame` of the asset_subclasses over period interval
+
+    .. note::
+
+        In an effort to ensure spurious asset classes aren't chosen (for instance,
+        'US Equity' to be chosen for one quarter and then 'Alternatives' to be chosen
+        in a different quarter, simply because of "similar asset performance"), the
+        process of the algorithm is:
+
+        1. Determine the "Overall Asset Class" for the entire period of the asset's
+        returns
+
+        2. Determine the subclass attributions over the rolling interval of time
+
     """
-    arr_a = arr_a.sort_index()
-    arr_a.dropna(inplace = True)
-    arr_b = arr_b.sort_index()
-    arr_b.dropna(inplace = True)
-    if arr_a.index.equals(arr_b.index) == False:
-        return arr_a.index & arr_b.index
-    else:
-        return arr_a.index
-
-def get_all_classes(asset_series):
-    asset_class = get_asset_classes(asset_series)
-    sub_classes = get_sub_classes(asset_series, asset_class)
-    return sub_classes.append(pandas.Series([asset_class], ['Asset Class']))
-
-def get_asset_class(asset_series):
-    ac_dict = {'VTSMX':'US Equity', 'VBMFX':'Fixed Income', 'VGTSX':'Intl Equity',
-               'IYR':'Alternative', 'GLD':'Alternative', 'GSG':'Alternative',
-               'WPS':'Alternative'}
-    data = web.DataReader(ac_dict.keys(), 'yahoo')['Adj Close']
-    rsq_d = {}
-    for ticker in data.columns:
-        ind = asset_series.dropna().index & data[ticker].dropna().index
-        rsq_d[ticker] = vwa.r_squared(asset_series[ind], data[ticker][ind])
-    rsq = pandas.Series(rsq_d)
-    return ac_dict[rsq.argmax()]
+    asset_class = get_asset_class(series)
+    return asset_subclass_by_interval(series, interval, asset_class)
     
-def get_sub_classes(series, asset_class):
-    
-    fi_dict = {'US Inflation Protected':'TIP', 'Foreign Treasuries':'BWX',
-               'Foreign High Yield':'PCY','US Investment Grade':'LQD',
-               'US High Yield':'HYG', 'US Treasuries ST':'SHY',
-               'US Treasuries LT':'TLT', 'US Treasuries MT':'IEF'}
+def asset_subclass_by_interval(series, interval, asset_class):
+    """
+    Return asset sub class weightings that explain the asset returns over interval
+    periods of "interval."
 
-    us_eq_dict = {'US Large Cap Growth':'JKE', 'US Large Cap Value':'JKF',
-                  'US Mid Cap Growth':'JKH','US Mid Cap Value':'JKI',
-                  'US Small Cap Growth':'JKK', 'US Small Cap Value':'JKL'}
+    :ARGS:
 
-    for_eq_dict = {'Foreign Developed Small Cap':'SCZ',
-                   'Foreign Developed Large Growth':'EFG',
-                   'Foreign Developed Large Value':'EFV',
-                   'Foreign Emerging Market':'EEM'}
+        asset_prices: :class:`pandas.Series` of the asset for which attribution
+        will be done
 
-    alt_dict = {'Commodities':'GSG', 'US Real Estate':'IYR',
-                'Foreign Real Estate':'WPS', 'US Preferred Stock':'PFF'}
+        asset_class_prices: :class:`pandas.DataFrame` of asset class prices
 
+        interval :class:string of the frequency interval 'quarterly' or 'annual'
 
-    sub_dict = {'Fixed Income': fi_dict, 'US Equity': us_eq_dict,
-                'Intl Equity': for_eq_dict, 'Alternative': alt_dict}
+    :RETURNS:
 
-    pairs = sub_dict[asset_class]
-    asset_class_prices = web.DataReader(pairs.values(), 'yahoo',
+        :class:`pandas.DataFrame` of proportions of each asset class that most
+        explain the returns of the individual security
+    """
+    ac_dict = asset_class_dict(asset_class)
+    benchmark = web.DataReader(ac_dict.values(), 'yahoo',
                                start = '01/01/2000')['Adj Close']
-    ind = clean_dates(series, asset_class_prices)
-    ret_series = best_fitting_weights(series[ind], asset_class_prices.loc[ind, :])
     
-    #change the column names to asset classes instead of tickers
-    return ret_series.rename(index = {v:k for k, v in pairs.iteritems()})
+    ind = clean_dates(series, benchmark)
+    dt_dict = {'quarterly': lambda x: x.quarter, 'annually': lambda x: x.year}
+    dts = numpy.append(
+        True, dt_dict[interval](ind[1:]) != dt_dict[interval](ind[:-1]) )
+    weight_d  = {}
+    for beg, fin in zip(ind[dts][:-1], ind[dts][1:]):
+        weight_d[beg] = best_fitting_weights(
+            series[beg:fin], benchmark.loc[beg:fin, :]).rename(
+            index = {v:k for k, v in ac_dict.iteritems()})
 
-def asset_class_tickers(asset_class):
+    return pandas.DataFrame(weight_d).transpose()
+
+def asset_class_dict(asset_class):
     """
     All of the ticker and asset class information stored in dictionary form for use
     by other functions
+
+    :ARGS:
+
+        asset_class: :class:`string` of ``US Equity``, ``Foreign Equity``,
+        ``Alternative`` or ``Fixed Income``.
+
+    :RETURNS:
+
+        :class:dict of the asset subclasses and respective tickers
     """
     fi_dict = {'US Inflation Protected':'TIP', 'Foreign Treasuries':'BWX',
                'Foreign High Yield':'PCY','US Investment Grade':'LQD',
@@ -102,24 +116,6 @@ def asset_class_tickers(asset_class):
                   'Alternative': alt_dict, 'Fixed Income': fi_dict}
 
     return class_dict[asset_class]
-
-def all_asset_classes(asset_series):
-    """
-    Load the different prices that can be determined to find the "Broad Asset Class"
-    into a :class:`pandas.Panel` and then pickle the data into ``../data/indexes``.
-    """
-    ac_dict = {'VTSMX':'US Equity', 'VBMFX':'Fixed Income', 'VGTSX':'Intl Equity',
-               'IYR':'Alternative', 'GLD':'Alternative', 'GSG':'Alternative'}
-        
-    asset_classes = ['US Equity', 'Fixed Income', 'Intl Equity', 'Alternative']
-    tickers = ['VTSMX', 'VBMFX', 'VGTSX', 'PFF','IYR','GLD','GSG']
-    data = web.DataReader(tickers, 'yahoo')['Adj Close']
-    rsq_d = {}
-    for ticker in data.columns:
-        ind = asset_series.index & data[ticker].index
-        rsq_d[ticker] = r_squared(asset_series[ind], data[ticker][ind])
-    rsq = pandas.Series(rsq_d)
-    return ac_dict[rsq.argmax()]
 
 def best_fitting_weights(series, asset_class_prices):
     """
@@ -182,41 +178,100 @@ def best_fitting_weights(series, asset_class_prices):
 
     return pandas.TimeSeries(normed, index = ac_rets.columns)
 
-def asset_class_by_interval(series, interval, asset_class):
+def clean_dates(arr_a, arr_b):
     """
-    Return asset class weightings that explain the asset returns over interval
-    periods of "interval."
+    Return the intersection of two :class:`pandas` objects, either a
+    :class:`pandas.Series` or a :class:`pandas.DataFrame`
 
     :ARGS:
 
-        asset_prices: :class:`pandas.Series` of the asset for which attribution
-        will be done
-
-        asset_class_prices: :class:`pandas.DataFrame` of asset class prices
-
-        interval :class:string of the frequency interval 'quarterly' or 'annual'
+        arr_a: :class:`pandas.DataFrame` or :class:`pandas.Series`
+        arr_b: :class:`pandas.DataFrame` or :class:`pandas.Series`
 
     :RETURNS:
 
-        :class:`pandas.DataFrame` of proportions of each asset class that most
-        explain the returns of the individual security
+        :class:`pandas.DatetimeIndex` of the intersection of the two :class:`pandas`
+        objects
     """
-    #import pdb
-    #pdb.set_trace()
-    ac_dict = asset_class_tickers(asset_class)
-    benchmark = web.DataReader(ac_dict.values(), 'yahoo',
-                               start = '01/01/2000')['Adj Close']
-    
-    ind = clean_dates(series, benchmark)
-    dt_dict = {'quarterly': lambda x: x.quarter, 'annually': lambda x: x.year}
-    dts = numpy.append(
-        True, dt_dict[interval](ind[1:]) != dt_dict[interval](ind[:-1]) )
-    weight_d  = {}
-    for beg, fin in zip(ind[dts][:-1], ind[dts][1:]):
-        weight_d[beg] = best_fitting_weights(
-            series[beg:fin], benchmark.loc[beg:fin, :]).rename(
-            index = {v:k for k, v in ac_dict.iteritems()})
+    arr_a = arr_a.sort_index()
+    arr_a.dropna(inplace = True)
+    arr_b = arr_b.sort_index()
+    arr_b.dropna(inplace = True)
+    if arr_a.index.equals(arr_b.index) == False:
+        return arr_a.index & arr_b.index
+    else:
+        return arr_a.index
 
-    return pandas.DataFrame(weight_d).transpose()
+def get_asset_and_subclasses(series):
+    """
+    Aggregator function that returns the overall asset class, and proportion of
+    subclasses attributed to the returns of ``series.``
+
+    :ARGS:
+
+        series: :class:`pandas.Series` of asset prices
+
+    :RETURNS:
+
+        :class:`pandas.Series` of the subclasses and asset class for the entire time
+        period
+    """
+    asset_class = get_asset_classes(series)
+    sub_classes = get_sub_classes(series, asset_class)
+    return sub_classes.append(pandas.Series([asset_class], ['Asset Class']))
+
+def get_asset_class(series):
+    """
+    Given as series of prices, find the most likely asset class of the asset, based
+    on r-squared attribution of return variance (i.e. maximizing r-squared).
+
+    :ARGS:
+
+        series: :class:`pandas.Series` of asset prices
+
+    .. note:: Functionality for Asset Allocation Funds
+
+        Current functionality only allows for a single asset class to be chosen
+        in an effort not to overfit the attribution of asset returns.  This logic
+        works well for "single asset class ETFs and Mutual Funds" but not for
+        multi-asset class strategies
+
+    """
+    ac_dict = {'VTSMX':'US Equity', 'VBMFX':'Fixed Income', 'VGTSX':'Intl Equity',
+               'IYR':'Alternative', 'GLD':'Alternative', 'GSG':'Alternative',
+               'WPS':'Alternative'}
+    data = web.DataReader(ac_dict.keys(), 'yahoo')['Adj Close']
+    rsq_d = {}
+    for ticker in data.columns:
+        ind = clean_dates(series, data[ticker])
+        rsq_d[ticker] = vwa.r_squared(asset_series[ind], data[ticker][ind])
+    rsq = pandas.Series(rsq_d)
+    return ac_dict[rsq.argmax()]
+    
+def get_sub_classes(series, asset_class):
+    """
+    Given an the prices of a single asset an its overall asset class, return the
+    proportion of returns attribute to each asset class
+
+    :ARGS:
+
+        series: :class:`pandas.Series` of asset prices
+
+        asset_class: :class:`string` of either ``US Equity``, ``Foreign Equity``, 
+        ``Alternative``, or  ``Fixed Income``
+
+    :RETURNS:
+
+        :class:`pandas.DataFrame` of the subclasses and their optimized proportion
+        to explain the ``series`` returns over the entire period.
+    """
+    pairs = asset_class_dict(asset_class)
+    asset_class_prices = web.DataReader(pairs.values(), 'yahoo',
+                               start = '01/01/2000')['Adj Close']
+    ind = clean_dates(series, asset_class_prices)
+    ret_series = best_fitting_weights(series[ind], asset_class_prices.loc[ind, :])
+    
+    #change the column names to asset classes instead of tickers
+    return ret_series.rename(index = {v:k for k, v in pairs.iteritems()})
 
     
