@@ -244,7 +244,7 @@ def get_asset_class(series):
     rsq_d = {}
     for ticker in data.columns:
         ind = clean_dates(series, data[ticker])
-        rsq_d[ticker] = vwa.r_squared(asset_series[ind], data[ticker][ind])
+        rsq_d[ticker] = vwa.r_squared(series[ind], data[ticker][ind])
     rsq = pandas.Series(rsq_d)
     return ac_dict[rsq.argmax()]
     
