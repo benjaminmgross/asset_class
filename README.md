@@ -23,8 +23,8 @@ where returns were coming from
 	rolling_weights = asset_class.asset_class_and_subclass_by_interval(fgtix, 'quarterly')
 	
 
-And that's it.  Let's see the subclass attributions that adjusted r-squared algorithm came up
-with.
+And that's it.  Let's see the subclass attributions that the adjusted r-squared
+optimization algorithm came up with.
 
 	import matplotlib.pyplot as plt
 	
