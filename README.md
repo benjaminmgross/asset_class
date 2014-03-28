@@ -63,5 +63,9 @@ Another one of my open source repositories
 Still very much a WIP, although I've added [Sphinx]http://sphinx-doc.org/) docstrings to auto generate documentation
 
 ##To Do:
+- Given a `pandas.DataFrame` of asset prices, and asset price weights, return an
+  aggregated asset class `pandas.DataFrame` on a quarterly basis
+
+- 
 
 
