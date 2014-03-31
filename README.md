@@ -66,6 +66,7 @@ Still very much a WIP, although I've added [Sphinx]http://sphinx-doc.org/) docst
 - Given a `pandas.DataFrame` of asset prices, and asset price weights, return an
   aggregated asset class `pandas.DataFrame` on a quarterly basis
 
-- 
+- Write the `Best Fitting Benchmark` algorithm, either for use in this library or
+  from the private `strat_check` repository that uses this module
 
 
