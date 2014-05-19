@@ -15,31 +15,34 @@ import visualize_wealth.analyze as vwa
 
 def asset_class_and_subclass_by_interval(series, interval):
     """
-    Aggregator function to determine the asset class for the entire period,
-    followed by asset subclass over intervals of ``interval.``
+    Aggregator function to determine the asset class for the entire 
+    period, followed by asset subclass over intervals of ``interval.``
 
     :ARGS:
 
         series: :class:`pandas.Series` of asset prices
 
-        interval: :class:string of the interval, currently only accepts ``quarterly``
-        or ``annual``
+        interval: :class:string of the interval, currently only accepts 
+        ``quarterly`` or ``annual``
 
     :RETURNS:
 
-        :class:`pandas.DataFrame` of the asset_subclasses over period interval
+        :class:`pandas.DataFrame` of the asset_subclasses over period 
+        interval
 
     .. note::
 
-        In an effort to ensure spurious asset classes aren't chosen (for instance,
-        'US Equity' to be chosen for one quarter and then 'Alternatives' to be chosen
-        in a different quarter, simply because of "similar asset performance"), the
-        process of the algorithm is:
+        In an effort to ensure spurious asset classes aren't chosen (for 
+        instance, 'US Equity' to be chosen for one quarter and then 
+        'Alternatives' to be chosen in a different quarter, simply 
+        because of   "similar asset performance"), the process of the 
+        algorithm is:
 
-        1. Determine the "Overall Asset Class" for the entire period of the asset's
-        returns
+        1. Determine the "Overall Asset Class" for the entire period of 
+        the asset's returns
 
-        2. Determine the subclass attributions over the rolling interval of time
+        2. Determine the subclass attributions over the rolling 
+        interval of time
 
     """
     asset_class = get_asset_class(series)
@@ -47,29 +50,32 @@ def asset_class_and_subclass_by_interval(series, interval):
     
 def asset_subclass_by_interval(series, interval, asset_class):
     """
-    Return asset sub class weightings that explain the asset returns over interval
-    periods of "interval."
+    Return asset sub class weightings that explain the asset returns 
+    over interval periods of "interval."
 
     :ARGS:
 
-        asset_prices: :class:`pandas.Series` of the asset for which attribution
-        will be done
+        asset_prices: :class:`pandas.Series` of the asset for which 
+        attribution will be done
 
-        asset_class_prices: :class:`pandas.DataFrame` of asset class prices
+        asset_class_prices: :class:`pandas.DataFrame` of asset class 
+        prices
 
-        interval :class:string of the frequency interval 'quarterly' or 'annual'
+        interval :class:string of the frequency interval 'quarterly' 
+        or 'annual'
 
     :RETURNS:
 
-        :class:`pandas.DataFrame` of proportions of each asset class that most
-        explain the returns of the individual security
+        :class:`pandas.DataFrame` of proportions of each asset class 
+        that most explain the returns of the individual security
     """
     ac_dict = asset_class_dict(asset_class)
     benchmark = web.DataReader(ac_dict.values(), 'yahoo',
                                start = '01/01/2000')['Adj Close']
     
     ind = clean_dates(series, benchmark)
-    dt_dict = {'quarterly': lambda x: x.quarter, 'annually': lambda x: x.year}
+    dt_dict = {'quarterly': lambda x: x.quarter, 
+               'annually': lambda x: x.year}
     dts = numpy.append(
         True, dt_dict[interval](ind[1:]) != dt_dict[interval](ind[:-1]) )
     weight_d  = {}
@@ -82,8 +88,8 @@ def asset_subclass_by_interval(series, interval, asset_class):
 
 def asset_class_dict(asset_class):
     """
-    All of the ticker and asset class information stored in dictionary form for use
-    by other functions
+    All of the ticker and asset class information stored in dictionary 
+    form for use by other functions
 
     :ARGS:
 
@@ -119,28 +125,30 @@ def asset_class_dict(asset_class):
 
 def best_fitting_weights(series, asset_class_prices):
     """
-    Return the best fitting weights given a :class:`pandas.Series` of asset prices
-    and a :class:`pandas.DataFrame` of asset class prices.  Can be used with the
-    :func:`clean_dates` function to ensure an intersection of the two indexes is
-    being passed to the function
+    Return the best fitting weights given a :class:`pandas.Series` of 
+    asset prices and a :class:`pandas.DataFrame` of asset class prices.  
+    Can be used with the :func:`clean_dates` function to ensure an 
+    intersection of the two indexes is being passed to the function
     
     :ARGS:
 
         asset_prices: m x 1 :class:`pandas.TimeSeries` of asset_prices
 
-        ac_prices: m x n :class:`pandas.DataFrame` asset class ("ac") prices
+        ac_prices: m x n :class:`pandas.DataFrame` asset class ("ac") 
+        prices
 
     :RETURNS:
 
-        :class:`pandas.TimeSeries` of nonnegative weights for each asset
-        such that the r_squared from the regression of Y ~ Xw + e is maximized
+        :class:`pandas.TimeSeries` of nonnegative weights for each 
+        asset such that the r_squared from the regression of 
+        :math:`Y ~ Xw + e` is maximized
 
     """
 
     def _r_squared_adj(weights):
         """
-        The Adjusted R-Squared that incorporates the number of independent variates
-        using the `Formula Found of Wikipedia
+        The Adjusted R-Squared that incorporates the number of 
+        independent variates using the `Formula Found of Wikipedia
         <http://en.wikipedia.org/wiki/Coefficient_of_determination#Adjusted_R2>_`
         """
 
@@ -171,9 +179,10 @@ def best_fitting_weights(series, asset_class_prices):
     #ensure the boundaries of the function are (0, 1)
     ge_zero = [(0,1) for i in numpy.arange(num_assets)]
 
-    #optimize to maximize r-squared, using the 'TNC' method (that uses the boundary
-    #functionality)
-    opt = sopt.minimize(_obj_fun, x0 = guess, method = 'TNC', bounds = ge_zero)
+    #optimize to maximize r-squared, using the 'TNC' method 
+    #(that uses the boundary functionality)
+    opt = sopt.minimize(_obj_fun, x0 = guess, method = 'TNC', 
+                        bounds = ge_zero)
     normed = opt.x*(1./numpy.sum(opt.x))
 
     return pandas.TimeSeries(normed, index = ac_rets.columns)
@@ -190,8 +199,8 @@ def clean_dates(arr_a, arr_b):
 
     :RETURNS:
 
-        :class:`pandas.DatetimeIndex` of the intersection of the two :class:`pandas`
-        objects
+        :class:`pandas.DatetimeIndex` of the intersection of the two 
+        :class:`pandas` objects
     """
     arr_a = arr_a.sort_index()
     arr_a.dropna(inplace = True)
@@ -204,8 +213,8 @@ def clean_dates(arr_a, arr_b):
 
 def get_asset_and_subclasses(series):
     """
-    Aggregator function that returns the overall asset class, and proportion of
-    subclasses attributed to the returns of ``series.``
+    Aggregator function that returns the overall asset class, and 
+    proportion of subclasses attributed to the returns of ``series.``
 
     :ARGS:
 
@@ -213,17 +222,19 @@ def get_asset_and_subclasses(series):
 
     :RETURNS:
 
-        :class:`pandas.Series` of the subclasses and asset class for the entire time
-        period
+        :class:`pandas.Series` of the subclasses and asset class for 
+        the entire time period
     """
     asset_class = get_asset_classes(series)
     sub_classes = get_sub_classes(series, asset_class)
-    return sub_classes.append(pandas.Series([asset_class], ['Asset Class']))
+    return sub_classes.append(
+        pandas.Series([asset_class], ['Asset Class']))
 
 def get_asset_class(series):
     """
-    Given as series of prices, find the most likely asset class of the asset, based
-    on r-squared attribution of return variance (i.e. maximizing r-squared).
+    Given as series of prices, find the most likely asset class of the 
+    asset, based on r-squared attribution of return variance (i.e. 
+    maximizing r-squared).
 
     :ARGS:
 
@@ -231,14 +242,15 @@ def get_asset_class(series):
 
     .. note:: Functionality for Asset Allocation Funds
 
-        Current functionality only allows for a single asset class to be chosen
-        in an effort not to overfit the attribution of asset returns.  This logic
-        works well for "single asset class ETFs and Mutual Funds" but not for
-        multi-asset class strategies
+        Current functionality only allows for a single asset class to 
+        be chosen in an effort not to overfit the attribution of asset 
+        returns.  This logic works well for "single asset class ETFs 
+        and Mutual Funds" but not for multi-asset class strategies
 
     """
-    ac_dict = {'VTSMX':'US Equity', 'VBMFX':'Fixed Income', 'VGTSX':'Intl Equity',
-               'IYR':'Alternative', 'GLD':'Alternative', 'GSG':'Alternative',
+    ac_dict = {'VTSMX':'US Equity', 'VBMFX':'Fixed Income', 
+               'VGTSX':'Intl Equity', 'IYR':'Alternative', 
+               'GLD':'Alternative', 'GSG':'Alternative',
                'WPS':'Alternative'}
     data = web.DataReader(ac_dict.keys(), 'yahoo')['Adj Close']
     rsq_d = {}
@@ -250,26 +262,28 @@ def get_asset_class(series):
     
 def get_sub_classes(series, asset_class):
     """
-    Given an the prices of a single asset an its overall asset class, return the
-    proportion of returns attribute to each asset class
+    Given an the prices of a single asset an its overall asset class, 
+    return the proportion of returns attribute to each asset class
 
     :ARGS:
 
         series: :class:`pandas.Series` of asset prices
 
-        asset_class: :class:`string` of either ``US Equity``, ``Foreign Equity``, 
-        ``Alternative``, or  ``Fixed Income``
+        asset_class: :class:`string` of either ``US Equity``, 
+        ``Foreign Equity``, ``Alternative``, or  ``Fixed Income``
 
     :RETURNS:
 
-        :class:`pandas.DataFrame` of the subclasses and their optimized proportion
-        to explain the ``series`` returns over the entire period.
+        :class:`pandas.DataFrame` of the subclasses and their 
+        optimized proportion to explain the ``series`` returns over 
+        the entire period.
     """
     pairs = asset_class_dict(asset_class)
     asset_class_prices = web.DataReader(pairs.values(), 'yahoo',
                                start = '01/01/2000')['Adj Close']
     ind = clean_dates(series, asset_class_prices)
-    ret_series = best_fitting_weights(series[ind], asset_class_prices.loc[ind, :])
+    ret_series = best_fitting_weights(series[ind], 
+                                      asset_class_prices.loc[ind, :])
     
     #change the column names to asset classes instead of tickers
     return ret_series.rename(index = {v:k for k, v in pairs.iteritems()})

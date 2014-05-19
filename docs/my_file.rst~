@@ -1,0 +1,15 @@
+
+Why `The ``asset_class`` Library
+ <https://github.com/benjaminmgross/asset_class>`_ Exists
+*********************************************************
+
+Asset classes are the lifeblood of allocation strategies.  Whether dealing with dynamic allocation strategies involving alternative assets, or static allocation methods leveraging traditional methodologies, the overall "asset class" remains one of the core components of many Investment Policies and quarterly / annual reports.
+
+This module aims to make the "extraction" of a portfolio's underlying asset class, simple, and painless, through straight forward linear programming techniques.  As always, comments, suggestions, and contributions are more than welcome.
+
+Asset Class
+****************
+
+.. automodule:: asset_class.asset_class
+    :members:
+
