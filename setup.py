@@ -17,11 +17,11 @@ setup(
     version="0.0.1",
     description="",
     long_description=read('README.rst'),
-    url='',
+    url='https://github.com/benjaminmgross/asset_class',
     license='',
     author='Benjamin M. Gross',
     author_email='benjaminMgross@gmail.com',
-    packages=find_packages(exclude=['tests']),
+    packages=['asset_class'],
     include_package_data=True,
     classifiers=[
         'Development Status :: 3 - Alpha',
