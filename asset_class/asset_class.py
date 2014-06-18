@@ -230,6 +230,44 @@ def get_asset_and_subclasses(series):
     return sub_classes.append(
         pandas.Series([asset_class], ['Asset Class']))
 
+
+def get_multiple_classes(ticker_list):
+    """
+    Given a list of tickers, find the most likely asset class for each of 
+    the assets, based on r-squared attribution of return variance (i.e. 
+    maximizing r-squared).
+
+    :ARGS:
+
+        series: :class:`pandas.Series` of asset prices
+
+    .. note:: Functionality for Asset Allocation Funds
+
+        Current functionality only allows for a single asset class to 
+        be chosen in an effort not to overfit the attribution of asset 
+        returns.  This logic works well for "single asset class ETFs 
+        and Mutual Funds" but not for multi-asset class strategies
+
+    """
+    ac_dict = {'VTSMX':'US Equity', 'VBMFX':'Fixed Income', 
+               'VGTSX':'Intl Equity', 'IYR':'Alternative', 
+               'GLD':'Alternative', 'GSG':'Alternative',
+               'WPS':'Alternative'}
+    data = web.DataReader(ac_dict.keys(), 'yahoo')['Adj Close']
+    ac_d = {}
+    rsq_d = {}
+    for asset in ticker_list:
+        print "getting ticker for " + asset
+        series = web.DataReader(asset, 'yahoo')['Adj Close']
+
+        for ticker in data.columns:
+            ind = clean_dates(series, data[ticker])
+            rsq_d[ticker] = vwa.r2(series[ind], data[ticker][ind])
+            rsq = pandas.Series(rsq_d)
+
+        ac_d[asset] = ac_dict[rsq.argmax()]
+    return pandas.Series(ac_d)
+
 def get_asset_class(series):
     """
     Given as series of prices, find the most likely asset class of the 
